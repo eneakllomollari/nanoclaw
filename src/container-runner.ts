@@ -26,6 +26,7 @@ import {
   stopContainer,
 } from './container-runtime.js';
 import { detectAuthMode } from './credential-proxy.js';
+import { readEnvFile } from './env.js';
 import { validateAdditionalMounts } from './mount-security.js';
 import { RegisteredGroup } from './types.js';
 
@@ -93,6 +94,37 @@ function buildVolumeMounts(
       containerPath: '/workspace/group',
       readonly: false,
     });
+
+    // Mount gws (Google Workspace CLI) credentials for Gmail/Calendar access
+    const gwsConfigDir = path.join(projectRoot, 'data', 'gws-config');
+    if (fs.existsSync(gwsConfigDir)) {
+      mounts.push({
+        hostPath: gwsConfigDir,
+        containerPath: '/home/node/.config/gws',
+        readonly: false,
+      });
+    }
+
+    // Mount git credentials for pull/push in mounted repos (e.g. life repo)
+    const gitConfigDir = path.join(projectRoot, 'data', 'git-config');
+    if (fs.existsSync(gitConfigDir)) {
+      const gitCreds = path.join(gitConfigDir, '.git-credentials');
+      const gitConfig = path.join(gitConfigDir, '.gitconfig');
+      if (fs.existsSync(gitCreds)) {
+        mounts.push({
+          hostPath: gitCreds,
+          containerPath: '/home/node/.git-credentials',
+          readonly: true,
+        });
+      }
+      if (fs.existsSync(gitConfig)) {
+        mounts.push({
+          hostPath: gitConfig,
+          containerPath: '/home/node/.gitconfig',
+          readonly: true,
+        });
+      }
+    }
   } else {
     // Other groups only get their own folder
     mounts.push({
@@ -236,6 +268,13 @@ function buildContainerArgs(
     args.push('-e', 'ANTHROPIC_API_KEY=placeholder');
   } else {
     args.push('-e', 'CLAUDE_CODE_OAUTH_TOKEN=placeholder');
+  }
+
+  // Pass through user-configured API keys for container skills
+  const passthroughEnvKeys = ['BUYBOT_API_KEY'];
+  const passthroughEnv = readEnvFile(passthroughEnvKeys);
+  for (const [key, value] of Object.entries(passthroughEnv)) {
+    args.push('-e', `${key}=${value}`);
   }
 
   // Runtime-specific args for host gateway resolution
