@@ -189,6 +189,23 @@ function buildVolumeMounts(
       fs.cpSync(srcDir, dstDir, { recursive: true });
     }
   }
+
+  // Also sync skills from additional mounts that have .claude/skills/
+  // This lets mounted repos (e.g. life repo) be the single source of truth
+  // for their own skills, avoiding duplication and drift.
+  if (group.containerConfig?.additionalMounts) {
+    for (const mount of group.containerConfig.additionalMounts) {
+      const mountSkills = path.join(mount.hostPath, '.claude', 'skills');
+      if (fs.existsSync(mountSkills)) {
+        for (const skillDir of fs.readdirSync(mountSkills)) {
+          const srcDir = path.join(mountSkills, skillDir);
+          if (!fs.statSync(srcDir).isDirectory()) continue;
+          const dstDir = path.join(skillsDst, skillDir);
+          fs.cpSync(srcDir, dstDir, { recursive: true });
+        }
+      }
+    }
+  }
   mounts.push({
     hostPath: groupSessionsDir,
     containerPath: '/home/node/.claude',
