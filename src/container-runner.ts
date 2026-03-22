@@ -96,12 +96,12 @@ function buildVolumeMounts(
     });
 
     // Mount gws (Google Workspace CLI) credentials for Gmail/Calendar access
-    const gwsConfigDir = path.join(projectRoot, 'data', 'gws-config');
-    if (fs.existsSync(gwsConfigDir)) {
+    const gwsCredsFile = path.join(projectRoot, 'data', 'gws-config', 'credentials.json');
+    if (fs.existsSync(gwsCredsFile)) {
       mounts.push({
-        hostPath: gwsConfigDir,
-        containerPath: '/home/node/.config/gws',
-        readonly: false,
+        hostPath: gwsCredsFile,
+        containerPath: '/home/node/.gws-credentials.json',
+        readonly: true,
       });
     }
 
@@ -292,6 +292,12 @@ function buildContainerArgs(
   const passthroughEnv = readEnvFile(passthroughEnvKeys);
   for (const [key, value] of Object.entries(passthroughEnv)) {
     args.push('-e', `${key}=${value}`);
+  }
+
+  // Point gws CLI at the mounted credentials file (avoids keyring dependency)
+  const gwsCredsPath = path.join(process.cwd(), 'data', 'gws-config', 'credentials.json');
+  if (fs.existsSync(gwsCredsPath)) {
+    args.push('-e', 'GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE=/home/node/.gws-credentials.json');
   }
 
   // Runtime-specific args for host gateway resolution
